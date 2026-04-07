@@ -60,6 +60,22 @@ interface RoomStatePayload {
 }
 
 const SOCKET_POLL_INTERVAL_MS = 3000;
+const getParticipantKey = (participant: RoomParticipant) =>
+  participant._id || participant.id || participant.name.trim().toLowerCase();
+
+const dedupeParticipants = (participants: RoomParticipant[] = []) => {
+  const seen = new Set<string>();
+
+  return participants.filter((participant) => {
+    const key = getParticipantKey(participant);
+    if (!key || seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+};
 
 export default function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   const unwrappedParams = use(params);
@@ -87,7 +103,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   const lastRemoteCodeRef = useRef('');
 
   const applyRoomState = (data: RoomStatePayload) => {
-    setParticipants(data.participants ?? []);
+    setParticipants(dedupeParticipants(data.participants ?? []));
 
     if (typeof data.language === 'string' && data.language) {
       setLanguage(data.language);
@@ -210,7 +226,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
       s.on('user-joined', (data: UserJoinedPayload) => {
         setParticipants((prev) => {
           if (prev.find((p) => p._id === data.userId || p.id === data.userId)) return prev;
-          return [...prev, { _id: data.userId, name: data.username }];
+          return dedupeParticipants([...prev, { _id: data.userId, name: data.username }]);
         });
       });
 
@@ -258,7 +274,6 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
       }
-      void api.post(`/rooms/${roomId}/leave`).catch(() => {});
       s?.emit('leave-room', { roomId, userId: user.id });
       s?.disconnect();
     };

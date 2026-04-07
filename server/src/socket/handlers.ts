@@ -10,26 +10,24 @@ export const setupSocketHandlers = (io: Server) => {
       console.log(`User ${username} joined room ${roomId}`);
 
       try {
-        // Fetch room to get current state
+        await Room.updateOne(
+          { roomId },
+          {
+            $addToSet: { participants: userId },
+            $set: { lastActive: new Date() },
+          }
+        );
+
         const room = await Room.findOne({ roomId }).populate('participants', 'name email');
         if (room) {
-          // Update lastActive
-          room.lastActive = new Date();
-          
-          if (!room.participants.some((p: any) => p._id.toString() === userId)) {
-            room.participants.push(userId);
-          }
-          await room.save();
           const populatedRoom = await Room.findById(room._id).populate('participants', 'name email');
 
-          // Send current state to the joining user
           socket.emit('room-joined', {
             participants: populatedRoom?.participants ?? [],
             currentCode: populatedRoom?.code ?? room.code,
             language: populatedRoom?.language ?? room.language,
           });
 
-          // Broadcast to others
           socket.to(roomId).emit('user-joined', { userId, username });
         }
       } catch (err) {

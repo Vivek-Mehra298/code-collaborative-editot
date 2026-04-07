@@ -6,6 +6,8 @@ const router = express.Router();
 const populateRoom = <T extends { populate: (path: string, select?: string) => T }>(query: T) =>
   query.populate('participants', 'name email').populate('createdBy', 'name email');
 
+const getPopulatedRoomById = (roomId: string) => populateRoom(Room.findById(roomId));
+
 router.post('/', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const { roomId, language } = req.body;
@@ -61,18 +63,20 @@ router.get('/:roomId', authMiddleware, async (req: AuthRequest, res) => {
 
 router.post('/:roomId/join', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const room = await Room.findOne({ roomId: req.params.roomId });
+    const room = await Room.findOneAndUpdate(
+      { roomId: req.params.roomId },
+      {
+        $addToSet: { participants: req.user },
+        $set: { lastActive: new Date() },
+      },
+      { new: true }
+    );
+
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    if (!room.participants.some((participant) => participant.toString() === req.user)) {
-      room.participants.push(req.user as never);
-      room.lastActive = new Date();
-      await room.save();
-    }
-
-    const populatedRoom = await populateRoom(Room.findById(room._id));
+    const populatedRoom = await getPopulatedRoomById(room._id.toString());
     res.json(populatedRoom);
   } catch (err) {
     console.error(err);
@@ -116,14 +120,17 @@ router.patch('/:roomId', authMiddleware, async (req: AuthRequest, res) => {
       room.language = language;
     }
 
-    if (!room.participants.some((participant) => participant.toString() === req.user)) {
-      room.participants.push(req.user as never);
-    }
-
     room.lastActive = new Date();
-    await room.save();
+    await room.updateOne({
+      $set: {
+        code: room.code,
+        language: room.language,
+        lastActive: room.lastActive,
+      },
+      $addToSet: { participants: req.user },
+    });
 
-    const populatedRoom = await populateRoom(Room.findById(room._id));
+    const populatedRoom = await getPopulatedRoomById(room._id.toString());
     res.json(populatedRoom);
   } catch (err) {
     console.error(err);

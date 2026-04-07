@@ -8,8 +8,12 @@ interface RoomCardProps {
   room: RoomSummary;
 }
 
+const getParticipantKey = (participant: RoomSummary['participants'][number]) =>
+  participant._id || participant.id || participant.name.trim().toLowerCase();
+
 export default function RoomCard({ room }: RoomCardProps) {
   const router = useRouter();
+  const uniqueParticipantCount = new Set(room.participants.map(getParticipantKey)).size;
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -37,7 +41,7 @@ export default function RoomCard({ room }: RoomCardProps) {
 
       <div className="flex items-center gap-2 mb-2 text-sm text-gray-400 font-jetbrains-mono">
         <span className="w-2 h-2 rounded-full bg-[var(--cyan-accent)] animate-pulse" />
-        {room.participants.length} Participant{room.participants.length !== 1 ? 's' : ''}
+        {uniqueParticipantCount} Participant{uniqueParticipantCount !== 1 ? 's' : ''}
       </div>
 
       <div className="flex justify-between items-center text-sm">
