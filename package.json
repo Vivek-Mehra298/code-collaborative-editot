@@ -4,10 +4,10 @@
   "description": "Root package for DevSync",
   "scripts": {
     "postinstall": "npm run install:all",
-    "install:all": "cd server && npm install && cd ../client && npm install",
-    "dev": "concurrently \"cd server && npm run dev\" \"cd client && npm run dev\"",
-    "build": "cd server && npm run build && cd ../client && npm run build",
-    "start": "concurrently \"cd server && npm start\" \"cd client && npm start\""
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "start": "concurrently \"npm --prefix server start\" \"npm --prefix client start\""
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
