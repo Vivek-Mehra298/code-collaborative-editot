@@ -12,6 +12,7 @@ const DEFAULT_DEV_ALLOWED_ORIGINS = [
   'http://localhost:3001',
   'http://127.0.0.1:3001',
 ];
+const DEFAULT_PROD_ALLOWED_ORIGINS = ['https://*.vercel.app'];
 
 const parseNumber = (value: string | undefined, fallback: number) => {
   if (!value) {
@@ -41,6 +42,10 @@ const allowedOriginPatterns = configuredOrigins.map((origin) => ({
   regex: wildcardToRegex(normalizeOrigin(origin)),
 }));
 const devAllowedOriginPatterns = DEFAULT_DEV_ALLOWED_ORIGINS.map((origin) => ({
+  raw: origin,
+  regex: wildcardToRegex(normalizeOrigin(origin)),
+}));
+const prodAllowedOriginPatterns = DEFAULT_PROD_ALLOWED_ORIGINS.map((origin) => ({
   raw: origin,
   regex: wildcardToRegex(normalizeOrigin(origin)),
 }));
@@ -113,7 +118,7 @@ export const getAllowedOrigins = () => {
   const configured = config.allowedOriginPatterns.map((pattern) => pattern.raw);
 
   if (isProduction) {
-    return configured;
+    return Array.from(new Set([...configured, ...DEFAULT_PROD_ALLOWED_ORIGINS]));
   }
 
   return Array.from(new Set([...configured, ...DEFAULT_DEV_ALLOWED_ORIGINS]));
@@ -132,6 +137,10 @@ export const isOriginAllowed = (origin: string | undefined) => {
 
   if (config.allowedOriginPatterns.some((pattern) => pattern.regex.test(normalizedOrigin))) {
     return true;
+  }
+
+  if (isProduction) {
+    return prodAllowedOriginPatterns.some((pattern) => pattern.regex.test(normalizedOrigin));
   }
 
   if (!isProduction) {

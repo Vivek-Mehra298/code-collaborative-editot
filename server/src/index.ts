@@ -18,12 +18,7 @@ const server = http.createServer(app);
 
 const corsOptions: cors.CorsOptions = {
   origin(origin, callback) {
-    if (isOriginAllowed(origin)) {
-      callback(null, true);
-      return;
-    }
-
-    callback(new Error(`Origin ${origin ?? 'unknown'} is not allowed by CORS`));
+    callback(null, isOriginAllowed(origin));
   },
   credentials: true,
 };
@@ -50,12 +45,7 @@ app.use('/api/rooms', roomRoutes);
 const io = new Server(server, {
   cors: {
     origin(origin, callback) {
-      if (isOriginAllowed(origin)) {
-        callback(null, true);
-        return;
-      }
-
-      callback(new Error(`Origin ${origin ?? 'unknown'} is not allowed by Socket.IO`));
+      callback(null, isOriginAllowed(origin));
     },
     methods: ['GET', 'POST'],
     credentials: true,
