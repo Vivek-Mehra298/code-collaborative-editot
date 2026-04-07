@@ -23,7 +23,10 @@ export default function Register() {
       login(res.data.token, res.data.user);
     } catch (error) {
       const err = error as AxiosError<{ message?: string }>;
-      setError(err.response?.data?.message || 'Registration failed');
+      setError(
+        err.response?.data?.message ||
+          (err.request ? 'Cannot reach the server. Check the deployed API URL configuration.' : 'Registration failed')
+      );
     }
   };
 
