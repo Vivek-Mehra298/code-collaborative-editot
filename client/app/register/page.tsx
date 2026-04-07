@@ -22,9 +22,11 @@ export default function Register() {
       const res = await api.post('/auth/register', { name, email, password });
       login(res.data.token, res.data.user);
     } catch (error) {
-      const err = error as AxiosError<{ message?: string }>;
+      const err = error as AxiosError<{ message?: string } | string>;
+      const responseMessage =
+        typeof err.response?.data === 'string' ? err.response.data : err.response?.data?.message;
       setError(
-        err.response?.data?.message ||
+        responseMessage ||
           (err.request ? 'Cannot reach the server. Check the deployed API URL configuration.' : 'Registration failed')
       );
     }
