@@ -65,8 +65,6 @@ const io = new Server(server, {
 setupSocketHandlers(io);
 
 // Database Connection
-connectDB();
-
 const PORT = config.port;
 const HOST = config.host;
 
@@ -79,8 +77,16 @@ server.on('error', (error: NodeJS.ErrnoException) => {
   console.error('Server startup error:', error);
 });
 
-server.listen(PORT, HOST, () => {
-  const localUrl = `http://localhost:${PORT}`;
-  console.log(`Server running at ${localUrl} (${isProduction ? 'production' : 'development'})`);
-});
+const startServer = async () => {
+  await connectDB();
 
+  server.listen(PORT, HOST, () => {
+    const localUrl = `http://localhost:${PORT}`;
+    console.log(`Server running at ${localUrl} (${isProduction ? 'production' : 'development'})`);
+  });
+};
+
+startServer().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});

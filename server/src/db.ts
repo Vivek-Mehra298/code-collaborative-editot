@@ -3,11 +3,14 @@ import dotenv from 'dotenv';
 import { getMongoUri, isProduction } from './config';
 
 dotenv.config();
+mongoose.set('bufferCommands', false);
 
 const connectDB = async () => {
   try {
     const mongoURI = getMongoUri();
-    await mongoose.connect(mongoURI);
+    await mongoose.connect(mongoURI, {
+      serverSelectionTimeoutMS: 10000,
+    });
     console.log('MongoDB Connected');
   } catch (error) {
     console.error('MongoDB Connection Error:', error);
