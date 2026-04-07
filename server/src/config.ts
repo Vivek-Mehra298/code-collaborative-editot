@@ -5,6 +5,7 @@ dotenv.config();
 const DEFAULT_PORT = 5000;
 const DEFAULT_DEV_HOST = '0.0.0.0';
 const DEFAULT_PROD_HOST = '0.0.0.0';
+const LOCAL_ONLY_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 
 const parseNumber = (value: string | undefined, fallback: number) => {
   if (!value) {
@@ -36,7 +37,10 @@ const allowedOriginPatterns = splitOrigins(process.env.ALLOWED_ORIGINS).map((ori
 export const config = {
   port: parseNumber(process.env.PORT, DEFAULT_PORT),
   nodeEnv: process.env.NODE_ENV ?? 'development',
-  host: process.env.HOST ?? (process.env.NODE_ENV === 'production' ? DEFAULT_PROD_HOST : DEFAULT_DEV_HOST),
+  host:
+    process.env.NODE_ENV === 'production' && process.env.HOST && LOCAL_ONLY_HOSTS.has(process.env.HOST)
+      ? DEFAULT_PROD_HOST
+      : process.env.HOST ?? (process.env.NODE_ENV === 'production' ? DEFAULT_PROD_HOST : DEFAULT_DEV_HOST),
   mongoUri: process.env.MONGO_URI,
   jwtSecret: process.env.JWT_SECRET,
   allowedOriginPatterns,
