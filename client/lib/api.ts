@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { clientConfig } from './config';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
+  baseURL: clientConfig.apiUrl,
 });
 
 // Request interceptor to add the token to headers

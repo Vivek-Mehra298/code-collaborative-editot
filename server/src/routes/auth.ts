@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { getJwtSecret } from '../config';
 
 const router = express.Router();
 
@@ -22,7 +23,7 @@ router.post('/register', async (req, res) => {
     await user.save();
 
     const payload = { userId: user.id };
-    const token = jwt.sign(payload, process.env.JWT_SECRET || 'supersecret', { expiresIn: '7d' });
+    const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
 
     res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
   } catch (err) {
@@ -46,7 +47,7 @@ router.post('/login', async (req, res) => {
     }
 
     const payload = { userId: user.id };
-    const token = jwt.sign(payload, process.env.JWT_SECRET || 'supersecret', { expiresIn: '7d' });
+    const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
 
     res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
   } catch (err) {

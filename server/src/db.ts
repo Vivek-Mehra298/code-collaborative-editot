@@ -1,16 +1,22 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import { getMongoUri, isProduction } from './config';
 
 dotenv.config();
 
 const connectDB = async () => {
   try {
-    const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/collaborative-editor';
+    const mongoURI = getMongoUri();
     await mongoose.connect(mongoURI);
     console.log('MongoDB Connected');
   } catch (error) {
     console.error('MongoDB Connection Error:', error);
-    process.exit(1);
+
+    if (isProduction) {
+      process.exit(1);
+    }
+
+    console.warn('Continuing without MongoDB in development. Set MONGO_URI or start a local MongoDB instance.');
   }
 };
 

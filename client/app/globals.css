@@ -4,14 +4,30 @@
   --bg-dark: #0a0a0f;
   --cyan-accent: #00d4ff;
   --violet-accent: #7c3aed;
+  --font-inter: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-space-grotesk: "Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif;
+  --font-jetbrains-mono: "Consolas", "Courier New", monospace;
 }
 
 body {
   background-color: var(--bg-dark);
   color: #f3f4f6;
+  font-family: var(--font-inter);
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+}
+
+.font-inter {
+  font-family: var(--font-inter);
+}
+
+.font-space-grotesk {
+  font-family: var(--font-space-grotesk);
+}
+
+.font-jetbrains-mono {
+  font-family: var(--font-jetbrains-mono);
 }
 
 .glass-panel {

@@ -2,14 +2,10 @@
 
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import type { RoomSummary } from '@/lib/types';
 
 interface RoomCardProps {
-  room: {
-    roomId: string;
-    language: string;
-    lastActive: string;
-    participants: any[];
-  }
+  room: RoomSummary;
 }
 
 export default function RoomCard({ room }: RoomCardProps) {

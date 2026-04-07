@@ -6,6 +6,7 @@ import api from '@/lib/api';
 import Navbar from '@/components/Navbar';
 import AnimatedBackground from '@/components/AnimatedBackground';
 import { motion } from 'framer-motion';
+import { AxiosError } from 'axios';
 
 export default function Register() {
   const { login } = useAuth();
@@ -20,7 +21,8 @@ export default function Register() {
     try {
       const res = await api.post('/auth/register', { name, email, password });
       login(res.data.token, res.data.user);
-    } catch (err: any) {
+    } catch (error) {
+      const err = error as AxiosError<{ message?: string }>;
       setError(err.response?.data?.message || 'Registration failed');
     }
   };

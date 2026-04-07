@@ -3,10 +3,13 @@
 import { useEffect, useState, useRef, use } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/lib/auth';
+import { clientConfig } from '@/lib/config';
+import type { RoomParticipant } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import Editor, { useMonaco } from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
+import type { editor } from 'monaco-editor';
 
 const LANGUAGES = [
   { id: 'javascript', name: 'JavaScript', compiler: 'nodejs-20.17.0' },
@@ -19,7 +22,35 @@ const LANGUAGES = [
   { id: 'php', name: 'PHP', compiler: 'php-8.3.12' },
 ];
 
-const COLORS = ['#00d4ff', '#7c3aed', '#ff0055', '#00ffaa', '#ffaa00'];
+interface CursorPosition {
+  lineNumber: number;
+  column: number;
+}
+
+interface RoomJoinedPayload {
+  participants: RoomParticipant[];
+  currentCode: string;
+  language: string;
+}
+
+interface UserJoinedPayload {
+  userId: string;
+  username: string;
+}
+
+interface UserLeftPayload {
+  userId: string;
+}
+
+interface CodeUpdatedPayload {
+  code: string;
+  changedBy: string;
+  cursorPosition?: CursorPosition;
+}
+
+interface LanguageUpdatedPayload {
+  language: string;
+}
 
 export default function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   const unwrappedParams = use(params);
@@ -28,7 +59,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   const router = useRouter();
   
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [participants, setParticipants] = useState<any[]>([]);
+  const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('javascript');
   const [status, setStatus] = useState('Connecting...');
@@ -38,7 +69,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   const [isExecuting, setIsExecuting] = useState(false);
   
   const monaco = useMonaco();
-  const editorRef = useRef<any>(null);
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const cursorsRef = useRef<Record<string, string[]>>({});
   
   useEffect(() => {
@@ -50,7 +81,9 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   useEffect(() => {
     if (!user) return;
 
-    const s = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000');
+    const s = io(clientConfig.socketUrl, {
+      transports: ['websocket', 'polling'],
+    });
     setSocket(s);
 
     s.on('connect', () => {
@@ -60,40 +93,45 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
 
     s.on('disconnect', () => setStatus('Reconnecting...'));
 
-    s.on('room-joined', (data) => {
+    s.on('room-joined', (data: RoomJoinedPayload) => {
       setCode(data.currentCode || '');
       setLanguage(data.language || 'javascript');
       setParticipants(data.participants);
     });
 
-    s.on('user-joined', (data) => {
+    s.on('user-joined', (data: UserJoinedPayload) => {
       setParticipants((prev) => {
         if (prev.find((p) => p._id === data.userId || p.id === data.userId)) return prev;
         return [...prev, { _id: data.userId, name: data.username }];
       });
     });
 
-    s.on('user-left', (data) => {
+    s.on('user-left', (data: UserLeftPayload) => {
       setParticipants((prev) => prev.filter((p) => (p._id || p.id) !== data.userId));
     });
 
-    s.on('code-updated', (data) => {
+    s.on('code-updated', (data: CodeUpdatedPayload) => {
       setCode(data.code);
       if (editorRef.current && monaco && data.cursorPosition) {
         const { lineNumber, column } = data.cursorPosition;
-        const color = COLORS[Math.abs(data.changedBy.hashCode?.() ?? 0) % COLORS.length];
 
         const newDecorations = [
           {
             range: new monaco.Range(lineNumber, column, lineNumber, column),
-            options: { className: 'remote-cursor', hoverMessage: { value: 'Peer User' } }
-          }
+            options: {
+              className: 'remote-cursor',
+              hoverMessage: { value: 'Peer User' },
+              afterContentClassName: 'remote-cursor-label',
+              stickiness:
+                monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+            },
+          },
         ];
         cursorsRef.current[data.changedBy] = editorRef.current.deltaDecorations(cursorsRef.current[data.changedBy] || [], newDecorations);
       }
     });
 
-    s.on('language-updated', (data) => {
+    s.on('language-updated', (data: LanguageUpdatedPayload) => {
       setLanguage(data.language);
     });
 
@@ -125,8 +163,8 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
     navigator.clipboard.writeText(window.location.href);
   };
 
-  const handleEditorDidMount = (editor: any, monacoInstance: any) => {
-    editorRef.current = editor;
+  const handleEditorDidMount = (editorInstance: editor.IStandaloneCodeEditor) => {
+    editorRef.current = editorInstance;
   };
 
   const runCode = async () => {
@@ -160,7 +198,8 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
       }
       
       setOutput(out || 'Execution finished successfully (No output).');
-    } catch (err: any) {
+    } catch (error) {
+      const err = error as AxiosError<{ message?: string }>;
       setOutput('Error executing code: ' + (err.response?.data?.message || err.message));
     } finally {
       setIsExecuting(false);
@@ -171,6 +210,10 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
     const style = document.createElement('style');
     style.innerHTML = `
       .remote-cursor { border-left: 2px solid var(--violet-accent); }
+      .remote-cursor-label::after {
+        content: '';
+        border-left: 2px solid var(--cyan-accent);
+      }
     `;
     document.head.appendChild(style);
     return () => { document.head.removeChild(style); };
@@ -310,7 +353,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
                   <span className="text-gray-300">{output}</span>
                 )
               ) : (
-                <span className="text-gray-600 italic">Click "Run Code" to see output here...</span>
+                <span className="text-gray-600 italic">Click &quot;Run Code&quot; to see output here...</span>
               )}
             </div>
           </div>

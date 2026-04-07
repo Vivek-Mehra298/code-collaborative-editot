@@ -5,6 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import connectDB from './db';
+import { config, getAllowedOrigins, isOriginAllowed, isProduction } from './config';
 
 import authRoutes from './routes/auth';
 import roomRoutes from './routes/rooms';
@@ -15,9 +16,31 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-app.use(cors());
+const corsOptions: cors.CorsOptions = {
+  origin(origin, callback) {
+    if (isOriginAllowed(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`Origin ${origin ?? 'unknown'} is not allowed by CORS`));
+  },
+  credentials: true,
+};
+
+app.set('trust proxy', 1);
+app.use(cors(corsOptions));
 app.use(helmet());
 app.use(express.json());
+
+app.get('/api/health', (_req, res) => {
+  res.json({
+    ok: true,
+    environment: config.nodeEnv,
+    allowedOrigins: getAllowedOrigins(),
+    uptime: process.uptime(),
+  });
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -26,9 +49,17 @@ app.use('/api/rooms', roomRoutes);
 // Socket.io
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
+    origin(origin, callback) {
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origin ${origin ?? 'unknown'} is not allowed by Socket.IO`));
+    },
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
 });
 
 setupSocketHandlers(io);
@@ -36,8 +67,20 @@ setupSocketHandlers(io);
 // Database Connection
 connectDB();
 
-const PORT = process.env.PORT || 5000;
+const PORT = config.port;
+const HOST = config.host;
 
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+server.on('error', (error: NodeJS.ErrnoException) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use on ${HOST}. Stop the existing process or set a different PORT.`);
+    return;
+  }
+
+  console.error('Server startup error:', error);
 });
+
+server.listen(PORT, HOST, () => {
+  const localUrl = `http://localhost:${PORT}`;
+  console.log(`Server running at ${localUrl} (${isProduction ? 'production' : 'development'})`);
+});
+

@@ -9,11 +9,12 @@ import RoomCard from '@/components/RoomCard';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { nanoid } from 'nanoid';
+import type { RoomSummary } from '@/lib/types';
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [rooms, setRooms] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [joinId, setJoinId] = useState('');
 
   useEffect(() => {

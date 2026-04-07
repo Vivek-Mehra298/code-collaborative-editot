@@ -1,19 +1,33 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+
+interface Particle {
+  id: number;
+  size: string;
+  background: string;
+  left: string;
+  top: string;
+  opacity: number;
+  xOffset: number;
+  duration: number;
+}
+
+const particles: Particle[] = Array.from({ length: 20 }, (_, id) => ({
+  id,
+  size: `${(id % 4) + 1}px`,
+  background: id % 2 === 0 ? 'var(--cyan-accent)' : 'var(--violet-accent)',
+  left: `${(id * 17) % 100}%`,
+  top: `${(id * 29) % 100}%`,
+  opacity: 0.15 + (id % 5) * 0.08,
+  xOffset: ((id % 6) - 3) * 14,
+  duration: 10 + (id % 7) * 2,
+}));
 
 export default function AnimatedBackground() {
-  const [mounted, setMounted] = useState(false);
-  
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) return null;
 
   return (
-    <div className="fixed inset-0 z-[-1] overflow-hidden bg-[var(--bg-dark)] pointer-events-none">
+    <div className="fixed inset-0 z-[-1] overflow-hidden bg-(--bg-dark) pointer-events-none">
       {/* Animated Grid Floor */}
       <div 
         className="absolute bottom-0 left-0 w-full h-[50vh] opacity-20"
@@ -26,24 +40,24 @@ export default function AnimatedBackground() {
       />
       
       {/* Floating Particles */}
-      {[...Array(20)].map((_, i) => (
+      {particles.map((particle) => (
         <motion.div
-          key={i}
+          key={particle.id}
           className="absolute rounded-full"
           style={{
-            width: Math.random() * 4 + 1 + 'px',
-            height: Math.random() * 4 + 1 + 'px',
-            background: i % 2 === 0 ? 'var(--cyan-accent)' : 'var(--violet-accent)',
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
-            opacity: Math.random() * 0.5 + 0.1,
+            width: particle.size,
+            height: particle.size,
+            background: particle.background,
+            left: particle.left,
+            top: particle.top,
+            opacity: particle.opacity,
           }}
           animate={{
             y: ['0vh', '-100vh'],
-            x: [0, Math.sin(Math.random() * 2) * 50],
+            x: [0, particle.xOffset],
           }}
           transition={{
-            duration: Math.random() * 10 + 10,
+            duration: particle.duration,
             repeat: Infinity,
             ease: 'linear',
           }}
