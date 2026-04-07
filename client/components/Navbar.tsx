@@ -40,7 +40,7 @@ export default function Navbar() {
               <motion.button 
                 whileHover={{ scale: 1.05, boxShadow: '0 0 15px var(--cyan-accent)' }}
                 whileTap={{ scale: 0.95 }}
-                className="px-5 py-2 bg-[var(--cyan-accent)] text-black font-semibold rounded-md shadow-lg"
+                className="px-5 py-2 bg-(--cyan-accent) text-black font-semibold rounded-md shadow-lg"
               >
                 Sign Up
               </motion.button>

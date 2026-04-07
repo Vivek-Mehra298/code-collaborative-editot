@@ -20,12 +20,13 @@ export const setupSocketHandlers = (io: Server) => {
             room.participants.push(userId);
           }
           await room.save();
+          const populatedRoom = await Room.findById(room._id).populate('participants', 'name email');
 
           // Send current state to the joining user
           socket.emit('room-joined', {
-            participants: room.participants,
-            currentCode: room.code,
-            language: room.language,
+            participants: populatedRoom?.participants ?? [],
+            currentCode: populatedRoom?.code ?? room.code,
+            language: populatedRoom?.language ?? room.language,
           });
 
           // Broadcast to others

@@ -3,6 +3,7 @@ const ensureApiPath = (value: string) => {
   const trimmed = trimTrailingSlash(value);
   return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
 };
+const removeApiPath = (value: string) => trimTrailingSlash(value).replace(/\/api$/, '');
 const isLocalHostname = (hostname: string) =>
   hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
 
@@ -32,16 +33,19 @@ const getApiUrl = () => {
   return configuredApiUrl ?? 'http://localhost:5000/api';
 };
 
-const getSocketUrl = () => {
+const getSocketUrl = (): string | null => {
   if (process.env.NEXT_PUBLIC_SOCKET_URL) return process.env.NEXT_PUBLIC_SOCKET_URL;
+  if (process.env.NEXT_PUBLIC_API_URL) return removeApiPath(process.env.NEXT_PUBLIC_API_URL);
   if (typeof window !== 'undefined') {
     if (isLocalHostname(window.location.hostname)) return 'http://localhost:5000';
-    return `${window.location.protocol}//${window.location.host}`;
+    return null;
   }
-  return 'http://localhost:5000';
+  return null;
 };
+
+const socketUrl = getSocketUrl();
 
 export const clientConfig = {
   apiUrl: trimTrailingSlash(getApiUrl()),
-  socketUrl: trimTrailingSlash(getSocketUrl()),
+  socketUrl: socketUrl ? trimTrailingSlash(socketUrl) : null,
 };

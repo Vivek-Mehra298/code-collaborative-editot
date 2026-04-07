@@ -3,6 +3,8 @@ import Room from '../models/Room';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 
 const router = express.Router();
+const populateRoom = <T extends { populate: (path: string, select?: string) => T }>(query: T) =>
+  query.populate('participants', 'name email').populate('createdBy', 'name email');
 
 router.post('/', authMiddleware, async (req: AuthRequest, res) => {
   try {
@@ -22,8 +24,9 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
       });
       await room.save();
     }
-    
-    res.json(room);
+
+    const populatedRoom = await populateRoom(Room.findById(room._id));
+    res.json(populatedRoom);
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
@@ -33,9 +36,9 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
 router.get('/recent', authMiddleware, async (req: AuthRequest, res) => {
   try {
     // Find rooms where user is participant or creator
-    const rooms = await Room.find({
+    const rooms = await populateRoom(Room.find({
       $or: [{ createdBy: req.user }, { participants: req.user }]
-    }).sort({ lastActive: -1 }).limit(10);
+    })).sort({ lastActive: -1 }).limit(10);
     res.json(rooms);
   } catch (err) {
     console.error(err);
@@ -45,11 +48,83 @@ router.get('/recent', authMiddleware, async (req: AuthRequest, res) => {
 
 router.get('/:roomId', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const room = await Room.findOne({ roomId: req.params.roomId });
+    const room = await populateRoom(Room.findOne({ roomId: req.params.roomId }));
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
     res.json(room);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+});
+
+router.post('/:roomId/join', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const room = await Room.findOne({ roomId: req.params.roomId });
+    if (!room) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
+
+    if (!room.participants.some((participant) => participant.toString() === req.user)) {
+      room.participants.push(req.user as never);
+      room.lastActive = new Date();
+      await room.save();
+    }
+
+    const populatedRoom = await populateRoom(Room.findById(room._id));
+    res.json(populatedRoom);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+});
+
+router.post('/:roomId/leave', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const room = await Room.findOne({ roomId: req.params.roomId });
+    if (!room) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
+
+    room.participants = room.participants.filter((participant) => participant.toString() !== req.user);
+    room.lastActive = new Date();
+    await room.save();
+
+    const populatedRoom = await populateRoom(Room.findById(room._id));
+    res.json(populatedRoom);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+});
+
+router.patch('/:roomId', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const { code, language } = req.body as { code?: string; language?: string };
+    const room = await Room.findOne({ roomId: req.params.roomId });
+
+    if (!room) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
+
+    if (typeof code === 'string') {
+      room.code = code;
+    }
+
+    if (typeof language === 'string' && language.trim()) {
+      room.language = language;
+    }
+
+    if (!room.participants.some((participant) => participant.toString() === req.user)) {
+      room.participants.push(req.user as never);
+    }
+
+    room.lastActive = new Date();
+    await room.save();
+
+    const populatedRoom = await populateRoom(Room.findById(room._id));
+    res.json(populatedRoom);
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');

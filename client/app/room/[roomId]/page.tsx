@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, use } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/lib/auth';
 import { clientConfig } from '@/lib/config';
+import api from '@/lib/api';
 import type { RoomParticipant } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import Editor, { useMonaco } from '@monaco-editor/react';
@@ -52,6 +53,14 @@ interface LanguageUpdatedPayload {
   language: string;
 }
 
+interface RoomStatePayload {
+  participants?: RoomParticipant[];
+  code?: string;
+  language?: string;
+}
+
+const SOCKET_POLL_INTERVAL_MS = 3000;
+
 export default function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   const unwrappedParams = use(params);
   const roomId = unwrappedParams.roomId;
@@ -71,6 +80,42 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   const monaco = useMonaco();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const cursorsRef = useRef<Record<string, string[]>>({});
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const latestCodeRef = useRef('');
+  const latestLanguageRef = useRef('javascript');
+  const lastRemoteCodeRef = useRef('');
+
+  const applyRoomState = (data: RoomStatePayload) => {
+    setParticipants(data.participants ?? []);
+
+    if (typeof data.language === 'string' && data.language) {
+      setLanguage(data.language);
+      latestLanguageRef.current = data.language;
+    }
+
+    if (typeof data.code === 'string') {
+      setCode(data.code);
+      latestCodeRef.current = data.code;
+      lastRemoteCodeRef.current = data.code;
+    }
+  };
+
+  const saveRoomState = async (partial: { code?: string; language?: string }) => {
+    try {
+      const response = await api.patch(`/rooms/${roomId}`, partial);
+      applyRoomState(response.data);
+    } catch (error) {
+      const err = error as AxiosError<{ message?: string } | string>;
+      const responseMessage =
+        typeof err.response?.data === 'string' ? err.response.data : err.response?.data?.message;
+      setStatus(responseMessage || 'Sync failed');
+    }
+  };
+
+  const updateConnectedStatus = (isSocketConnected: boolean) => {
+    setStatus(isSocketConnected ? 'Connected' : 'Synced via API');
+  };
   
   useEffect(() => {
     if (!loading && !user) {
@@ -81,69 +126,148 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
   useEffect(() => {
     if (!user) return;
 
-    const s = io(clientConfig.socketUrl, {
-      transports: ['websocket', 'polling'],
-    });
-    setSocket(s);
+    let isMounted = true;
+    let socketConnected = false;
 
-    s.on('connect', () => {
-      setStatus('Connected');
-      s.emit('join-room', { roomId, userId: user.id, username: user.name });
-    });
-
-    s.on('disconnect', () => setStatus('Reconnecting...'));
-
-    s.on('room-joined', (data: RoomJoinedPayload) => {
-      setCode(data.currentCode || '');
-      setLanguage(data.language || 'javascript');
-      setParticipants(data.participants);
-    });
-
-    s.on('user-joined', (data: UserJoinedPayload) => {
-      setParticipants((prev) => {
-        if (prev.find((p) => p._id === data.userId || p.id === data.userId)) return prev;
-        return [...prev, { _id: data.userId, name: data.username }];
-      });
-    });
-
-    s.on('user-left', (data: UserLeftPayload) => {
-      setParticipants((prev) => prev.filter((p) => (p._id || p.id) !== data.userId));
-    });
-
-    s.on('code-updated', (data: CodeUpdatedPayload) => {
-      setCode(data.code);
-      if (editorRef.current && monaco && data.cursorPosition) {
-        const { lineNumber, column } = data.cursorPosition;
-
-        const newDecorations = [
-          {
-            range: new monaco.Range(lineNumber, column, lineNumber, column),
-            options: {
-              className: 'remote-cursor',
-              hoverMessage: { value: 'Peer User' },
-              afterContentClassName: 'remote-cursor-label',
-              stickiness:
-                monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-            },
-          },
-        ];
-        cursorsRef.current[data.changedBy] = editorRef.current.deltaDecorations(cursorsRef.current[data.changedBy] || [], newDecorations);
+    const fetchRoomState = async () => {
+      try {
+        const response = await api.get(`/rooms/${roomId}`);
+        if (isMounted) {
+          applyRoomState(response.data);
+          updateConnectedStatus(socketConnected);
+        }
+      } catch (error) {
+        const err = error as AxiosError<{ message?: string } | string>;
+        const responseMessage =
+          typeof err.response?.data === 'string' ? err.response.data : err.response?.data?.message;
+        if (isMounted) {
+          setStatus(responseMessage || 'Failed to load room');
+        }
       }
-    });
+    };
 
-    s.on('language-updated', (data: LanguageUpdatedPayload) => {
-      setLanguage(data.language);
-    });
+    const joinRoomState = async () => {
+      try {
+        const response = await api.post(`/rooms/${roomId}/join`);
+        if (isMounted) {
+          applyRoomState(response.data);
+          updateConnectedStatus(socketConnected);
+        }
+      } catch (error) {
+        const err = error as AxiosError<{ message?: string } | string>;
+        const responseMessage =
+          typeof err.response?.data === 'string' ? err.response.data : err.response?.data?.message;
+        if (isMounted) {
+          setStatus(responseMessage || 'Failed to join room');
+        }
+      }
+    };
+
+    void joinRoomState();
+    void fetchRoomState();
+
+    pollingIntervalRef.current = setInterval(() => {
+      if (!isMounted || socketConnected) {
+        return;
+      }
+
+      void fetchRoomState();
+    }, SOCKET_POLL_INTERVAL_MS);
+
+    let s: Socket | null = null;
+
+    if (clientConfig.socketUrl) {
+      s = io(clientConfig.socketUrl, {
+        transports: ['websocket', 'polling'],
+      });
+      setSocket(s);
+
+      s.on('connect', () => {
+        socketConnected = true;
+        updateConnectedStatus(true);
+        s?.emit('join-room', { roomId, userId: user.id, username: user.name });
+      });
+
+      s.on('connect_error', () => {
+        socketConnected = false;
+        updateConnectedStatus(false);
+      });
+
+      s.on('disconnect', () => {
+        socketConnected = false;
+        updateConnectedStatus(false);
+      });
+
+      s.on('room-joined', (data: RoomJoinedPayload) => {
+        applyRoomState({
+          code: data.currentCode || '',
+          language: data.language || 'javascript',
+          participants: data.participants,
+        });
+        updateConnectedStatus(true);
+      });
+
+      s.on('user-joined', (data: UserJoinedPayload) => {
+        setParticipants((prev) => {
+          if (prev.find((p) => p._id === data.userId || p.id === data.userId)) return prev;
+          return [...prev, { _id: data.userId, name: data.username }];
+        });
+      });
+
+      s.on('user-left', (data: UserLeftPayload) => {
+        setParticipants((prev) => prev.filter((p) => (p._id || p.id) !== data.userId));
+      });
+
+      s.on('code-updated', (data: CodeUpdatedPayload) => {
+        setCode(data.code);
+        latestCodeRef.current = data.code;
+        lastRemoteCodeRef.current = data.code;
+        if (editorRef.current && monaco && data.cursorPosition) {
+          const { lineNumber, column } = data.cursorPosition;
+
+          const newDecorations = [
+            {
+              range: new monaco.Range(lineNumber, column, lineNumber, column),
+              options: {
+                className: 'remote-cursor',
+                hoverMessage: { value: 'Peer User' },
+                afterContentClassName: 'remote-cursor-label',
+                stickiness:
+                  monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+              },
+            },
+          ];
+          cursorsRef.current[data.changedBy] = editorRef.current.deltaDecorations(cursorsRef.current[data.changedBy] || [], newDecorations);
+        }
+      });
+
+      s.on('language-updated', (data: LanguageUpdatedPayload) => {
+        setLanguage(data.language);
+        latestLanguageRef.current = data.language;
+      });
+    } else {
+      setSocket(null);
+      updateConnectedStatus(false);
+    }
 
     return () => {
-      s.emit('leave-room', { roomId, userId: user.id });
-      s.disconnect();
+      isMounted = false;
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+      void api.post(`/rooms/${roomId}/leave`).catch(() => {});
+      s?.emit('leave-room', { roomId, userId: user.id });
+      s?.disconnect();
     };
   }, [user, roomId, monaco]);
 
   const handleCodeChange = (newCode: string | undefined) => {
     if (newCode === undefined) return;
     setCode(newCode);
+    latestCodeRef.current = newCode;
     if (socket) {
       let cursorPosition = null;
       if (editorRef.current) {
@@ -151,12 +275,24 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
       }
       socket.emit('code-change', { roomId, code: newCode, cursorPosition });
     }
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      if (latestCodeRef.current !== lastRemoteCodeRef.current) {
+        void saveRoomState({ code: latestCodeRef.current });
+      }
+    }, 700);
   };
 
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const lang = e.target.value;
     setLanguage(lang);
+    latestLanguageRef.current = lang;
     socket?.emit('language-change', { roomId, language: lang });
+    void saveRoomState({ language: lang });
   };
 
   const handleCopyLink = () => {
@@ -297,7 +433,13 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
 
           <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
             <div className="flex items-center gap-2 bg-gray-900/50 px-3 py-1.5 rounded-lg border border-gray-800">
-              <span className={`w-2 h-2 rounded-full ${status === 'Connected' ? 'bg-[var(--cyan-accent)] animate-pulse shadow-[0_0_8px_var(--cyan-accent)]' : 'bg-red-500'}`} />
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  status === 'Connected' || status === 'Synced via API'
+                    ? 'bg-[var(--cyan-accent)] animate-pulse shadow-[0_0_8px_var(--cyan-accent)]'
+                    : 'bg-red-500'
+                }`}
+              />
               <span className="text-xs font-jetbrains-mono text-gray-400 hidden sm:inline">{status}</span>
             </div>
             <motion.button 
@@ -307,7 +449,7 @@ export default function RoomPage({ params }: { params: Promise<{ roomId: string 
               disabled={isExecuting}
               className="px-4 md:px-6 py-2 bg-[var(--violet-accent)] text-white text-sm md:text-base font-bold rounded shadow-[0_0_15px_rgba(124,58,237,0.4)] hover:shadow-[0_0_20px_rgba(124,58,237,0.7)] disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
             >
-              {isExecuting ? 'Running...' : '▶ Run Code'}
+              {isExecuting ? 'Running...' : 'Run Code'}
             </motion.button>
           </div>
         </div>
