@@ -5,6 +5,8 @@ import { getMongoUri, isProduction } from './config';
 dotenv.config();
 mongoose.set('bufferCommands', false);
 
+export const isDatabaseReady = () => mongoose.connection.readyState === 1;
+
 const connectDB = async () => {
   try {
     const mongoURI = getMongoUri();

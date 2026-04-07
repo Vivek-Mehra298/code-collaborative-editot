@@ -6,6 +6,12 @@ const DEFAULT_PORT = 5000;
 const DEFAULT_DEV_HOST = '0.0.0.0';
 const DEFAULT_PROD_HOST = '0.0.0.0';
 const LOCAL_ONLY_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+const DEFAULT_DEV_ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3001',
+];
 
 const parseNumber = (value: string | undefined, fallback: number) => {
   if (!value) {
@@ -29,7 +35,12 @@ const wildcardToRegex = (pattern: string) => {
   return new RegExp(`^${escaped}$`);
 };
 
-const allowedOriginPatterns = splitOrigins(process.env.ALLOWED_ORIGINS).map((origin) => ({
+const configuredOrigins = splitOrigins(process.env.ALLOWED_ORIGINS);
+const allowedOriginPatterns = configuredOrigins.map((origin) => ({
+  raw: origin,
+  regex: wildcardToRegex(normalizeOrigin(origin)),
+}));
+const devAllowedOriginPatterns = DEFAULT_DEV_ALLOWED_ORIGINS.map((origin) => ({
   raw: origin,
   regex: wildcardToRegex(normalizeOrigin(origin)),
 }));
@@ -98,7 +109,15 @@ export const getMongoUri = () => {
   return DEVELOPMENT_MONGO_URI;
 };
 
-export const getAllowedOrigins = () => config.allowedOriginPatterns.map((pattern) => pattern.raw);
+export const getAllowedOrigins = () => {
+  const configured = config.allowedOriginPatterns.map((pattern) => pattern.raw);
+
+  if (isProduction) {
+    return configured;
+  }
+
+  return Array.from(new Set([...configured, ...DEFAULT_DEV_ALLOWED_ORIGINS]));
+};
 
 export const isOriginAllowed = (origin: string | undefined) => {
   if (!origin) {
@@ -111,5 +130,13 @@ export const isOriginAllowed = (origin: string | undefined) => {
     return !isProduction;
   }
 
-  return config.allowedOriginPatterns.some((pattern) => pattern.regex.test(normalizedOrigin));
+  if (config.allowedOriginPatterns.some((pattern) => pattern.regex.test(normalizedOrigin))) {
+    return true;
+  }
+
+  if (!isProduction) {
+    return devAllowedOriginPatterns.some((pattern) => pattern.regex.test(normalizedOrigin));
+  }
+
+  return false;
 };

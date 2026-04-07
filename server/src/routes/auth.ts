@@ -4,11 +4,25 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { getJwtSecret } from '../config';
+import { isDatabaseReady } from '../db';
 
 const router = express.Router();
 
+const ensureDatabaseReady = (res: express.Response) => {
+  if (isDatabaseReady()) {
+    return true;
+  }
+
+  res.status(503).json({ message: 'Database not connected. Check MongoDB configuration.' });
+  return false;
+};
+
 router.post('/register', async (req, res) => {
   try {
+    if (!ensureDatabaseReady(res)) {
+      return;
+    }
+
     const { name, email, password } = req.body;
     
     let user = await User.findOne({ email });
@@ -34,6 +48,10 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
+    if (!ensureDatabaseReady(res)) {
+      return;
+    }
+
     const { email, password } = req.body;
     
     const user = await User.findOne({ email });
@@ -58,6 +76,10 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    if (!ensureDatabaseReady(res)) {
+      return;
+    }
+
     const user = await User.findById(req.user).select('-passwordHash');
     res.json(user);
   } catch (err) {

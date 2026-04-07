@@ -77,12 +77,24 @@ server.on('error', (error: NodeJS.ErrnoException) => {
   console.error('Server startup error:', error);
 });
 
-const startServer = async () => {
-  await connectDB();
-
+const listen = () => {
   server.listen(PORT, HOST, () => {
     const localUrl = `http://localhost:${PORT}`;
     console.log(`Server running at ${localUrl} (${isProduction ? 'production' : 'development'})`);
+  });
+};
+
+const startServer = async () => {
+  if (isProduction) {
+    await connectDB();
+    listen();
+    return;
+  }
+
+  listen();
+
+  connectDB().catch((error) => {
+    console.error('Database startup warning:', error);
   });
 };
 
