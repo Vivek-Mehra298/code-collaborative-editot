@@ -1,4 +1,8 @@
 import type { NextConfig } from "next";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const appRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const trimTrailingSlash = (value: string) => value.replace(/\/$/, "");
 const ensureApiPath = (value: string) => {
@@ -10,11 +14,13 @@ const resolveApiDestination = () => {
   if (process.env.API_URL) return ensureApiPath(process.env.API_URL);
   if (process.env.NEXT_PUBLIC_API_URL) return ensureApiPath(process.env.NEXT_PUBLIC_API_URL);
   if (process.env.NEXT_PUBLIC_SOCKET_URL) return `${trimTrailingSlash(process.env.NEXT_PUBLIC_SOCKET_URL)}/api`;
+  if (process.env.NODE_ENV !== "production") return "http://localhost:5000/api";
   return null;
 };
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  outputFileTracingRoot: appRoot,
   async rewrites() {
     const apiDestination = resolveApiDestination();
 

@@ -21,12 +21,8 @@ const getApiUrl = () => {
   }
 
   if (typeof window !== 'undefined') {
-    if (isLocalHostname(window.location.hostname)) {
-      return configuredApiUrl ?? 'http://localhost:5000/api';
-    }
-
-    // In deployed environments we use the Next.js proxy route so the browser
-    // does not need to call the Railway origin directly.
+    // Use the Next.js proxy route in the browser so local network hostnames
+    // and deployed domains do not need direct CORS access to the API server.
     return '/api';
   }
 
