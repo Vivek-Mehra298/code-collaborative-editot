@@ -1,8 +1,4 @@
 import type { NextConfig } from "next";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const appRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const trimTrailingSlash = (value: string) => value.replace(/\/$/, "");
 const ensureApiPath = (value: string) => {
@@ -20,7 +16,6 @@ const resolveApiDestination = () => {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  outputFileTracingRoot: appRoot,
   async rewrites() {
     const apiDestination = resolveApiDestination();
 
