@@ -46,40 +46,35 @@ npm run dev
 ### MongoDB Atlas
 1. Create an Atlas cluster.
 2. Create a database user.
-3. In Network Access, allow Railway to connect. For a first deploy you can temporarily allow `0.0.0.0/0`, then tighten it later.
-4. Copy the Atlas connection string and set it as `MONGO_URI` in Railway.
+3. In Network Access, allow Render to connect. For a first deploy you can temporarily allow `0.0.0.0/0`, then tighten it later.
+4. Copy the Atlas connection string and set it as `MONGO_URI` in Render.
 
-### Railway backend
-Set Railway root directory to `server` and configure these variables:
+### Render backend (Recommended)
+This repository includes a `render.yaml` blueprint file for easy deployment on Render:
+1. Go to **Render Dashboard** and click **New** > **Blueprint**.
+2. Connect your GitHub repository.
+3. Render will automatically detect the configuration in `render.yaml`.
+4. Provide the `MONGO_URI` (your MongoDB Atlas connection string) and deploy.
 
-```env
-NODE_ENV=production
-PORT=${{RAILWAY_PUBLIC_PORT}}
-MONGO_URI=your-atlas-connection-string
-JWT_SECRET=your-long-random-secret
-ALLOWED_ORIGINS=https://your-frontend-domain.vercel.app,https://your-preview-domain.vercel.app
-```
-
-Use these commands:
-
-```bash
-npm install
-npm run build
-npm run start
-```
-
-Backend health check:
-
-```text
-/api/health
-```
+Alternatively, to deploy manually as a Web Service on Render:
+- **Runtime**: `Node`
+- **Root Directory**: `server`
+- **Build Command**: `npm install && npm run build`
+- **Start Command**: `npm start`
+- Configure environment variables:
+  ```env
+  NODE_ENV=production
+  MONGO_URI=your-atlas-connection-string
+  JWT_SECRET=your-long-random-secret
+  ALLOWED_ORIGINS=https://your-frontend-domain.vercel.app
+  ```
 
 ### Vercel frontend
 Set Vercel project root to `client` and configure:
 
 ```env
-NEXT_PUBLIC_API_URL=https://your-railway-domain.up.railway.app/api
-NEXT_PUBLIC_SOCKET_URL=https://your-railway-domain.up.railway.app
+NEXT_PUBLIC_API_URL=https://your-render-subdomain.onrender.com/api
+NEXT_PUBLIC_SOCKET_URL=https://your-render-subdomain.onrender.com
 ```
 
 Vercel can use the default Next.js build settings.
