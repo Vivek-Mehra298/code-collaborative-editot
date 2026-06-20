@@ -16,17 +16,16 @@ const getConfiguredApiUrl = () => {
 const getApiUrl = () => {
   const configuredApiUrl = getConfiguredApiUrl();
 
-  if (configuredApiUrl && typeof window === 'undefined') {
+  if (configuredApiUrl) {
     return configuredApiUrl;
   }
 
   if (typeof window !== 'undefined') {
-    // Use the Next.js proxy route in the browser so local network hostnames
-    // and deployed domains do not need direct CORS access to the API server.
+    // Use the Next.js proxy route in the browser as a fallback
     return '/api';
   }
 
-  return configuredApiUrl ?? 'http://localhost:5000/api';
+  return 'http://localhost:5000/api';
 };
 
 const getSocketUrl = (): string | null => {
