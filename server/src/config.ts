@@ -131,10 +131,6 @@ export const isOriginAllowed = (origin: string | undefined) => {
 
   const normalizedOrigin = normalizeOrigin(origin);
 
-  if (!config.allowedOriginPatterns.length) {
-    return !isProduction;
-  }
-
   if (config.allowedOriginPatterns.some((pattern) => pattern.regex.test(normalizedOrigin))) {
     return true;
   }
@@ -143,9 +139,9 @@ export const isOriginAllowed = (origin: string | undefined) => {
     return prodAllowedOriginPatterns.some((pattern) => pattern.regex.test(normalizedOrigin));
   }
 
-  if (!isProduction) {
-    return devAllowedOriginPatterns.some((pattern) => pattern.regex.test(normalizedOrigin));
+  if (!config.allowedOriginPatterns.length) {
+    return true;
   }
 
-  return false;
+  return devAllowedOriginPatterns.some((pattern) => pattern.regex.test(normalizedOrigin));
 };
